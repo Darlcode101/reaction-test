@@ -60,16 +60,6 @@ const TESTS = {
   },
 };
 
-// What a stimulus is relative to the goal, for the CSV.
-function stimulusType(item, goal) {
-  const shapeOk = item.shape === goal.shape;
-  const colourOk = item.colour === goal.colour;
-  if (shapeOk && colourOk) return 'goal';
-  if (shapeOk) return 'wrong colour';
-  if (colourOk) return 'wrong shape';
-  return 'wrong shape and colour';
-}
-
 const $ = id => document.getElementById(id);
 const stage = $('stage'), stim = $('stim'), msg = $('msg');
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -105,7 +95,6 @@ function startTest(key) {
   const goal = t.makeGoal();
   run = {
     key, t, goal,
-    name: $('name').value.trim() || 'anonymous',
     seq: buildSequence(t, goal),
     idx: 0, attempt: 0, log: [],
     state: 'ready', timer: null, shownAt: 0, current: null,
@@ -131,9 +120,7 @@ function record(result, item, ms) {
     row: run.log.length + 1,
     attempt: run.attempt + 1,
     shown: item ? labelOf(item) : '',
-    type: item ? stimulusType(item, run.goal) : '',
     result, ms,
-    time: new Date().toISOString(),
   });
 }
 
@@ -199,7 +186,7 @@ function press(e) {
 
 function finish() {
   run.state = 'done';
-  const r = { key: run.key, label: run.t.label, goal: labelOf(run.goal), name: run.name, log: run.log, date: new Date() };
+  const r = { key: run.key, label: run.t.label, goal: labelOf(run.goal), log: run.log, date: new Date() };
   lastResults[r.key] = r;
   renderResults(r);
   renderDownloads();
@@ -243,7 +230,7 @@ function renderDownloads() {
   $('downloads').innerHTML = '';
   for (const r of Object.values(lastResults)) {
     const b = document.createElement('button');
-    b.textContent = `⬇ ${r.label} CSV (${r.name})`;
+    b.textContent = `⬇ ${r.label} CSV`;
     b.onclick = () => downloadCSV(r);
     $('downloads').append(b);
   }
@@ -254,15 +241,14 @@ const csvCell = v => {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+// One row per goal attempt (1–10); a missed attempt has an empty ms.
 function downloadCSV(r) {
-  const head = ['participant', 'test', 'goal', 'row', 'attempt', 'shown', 'stimulus_type', 'result', 'reaction_ms', 'timestamp'];
-  const rows = r.log.map(l => [r.name, r.key, r.goal, l.row, l.attempt, l.shown, l.type, l.result, l.ms, l.time]);
-  const csv = [head, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
-  const slug = r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'anonymous';
+  const rows = r.log.filter(l => l.result === 'hit' || l.result === 'miss').map(l => [l.attempt, l.ms]);
+  const csv = [['test_number', 'ms'], ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
   const stamp = r.date.toISOString().slice(0, 16).replace(/[:T]/g, '-');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  a.download = `reaction-${r.key}-${slug}-${stamp}.csv`;
+  a.download = `reaction-${r.key}-${stamp}.csv`;
   document.body.append(a);
   a.click();
   a.remove();
@@ -288,6 +274,3 @@ document.addEventListener('keydown', e => {
 $('quit').onclick = () => { if (run) clearTimeout(run.timer); run = null; showScreen('home'); };
 $('again').onclick = () => startTest(run.key);
 $('home-btn').onclick = () => showScreen('home');
-
-try { $('name').value = localStorage.getItem('reaction-name') || ''; } catch {}
-$('name').addEventListener('input', e => { try { localStorage.setItem('reaction-name', e.target.value); } catch {} });

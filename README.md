@@ -9,20 +9,16 @@ Each test runs 10 goal appearances, with 0–2 distractors before each one and a
 
 ## Results / CSV
 
-After a test you get average, median and best times plus a per-attempt table. **Download CSV** gives one row per event:
+After a test you get average, median and best times plus a per-attempt table. **Download CSV** gives two columns, one row per goal attempt (1–10):
 
-| column | meaning |
-| --- | --- |
-| participant | name entered on the home screen |
-| test | `shape` or `combo` (shape + colour) |
-| goal | the goal for that run, e.g. `Cube` or `Red Cube` |
-| row | event number |
-| attempt | which of the 10 goal attempts this happened during |
-| shown | what was on screen when you clicked |
-| stimulus_type | `goal`, `wrong shape`, `wrong colour` or `wrong shape and colour` |
-| result | `hit`, `miss`, `wrong` (clicked a distractor) or `early` (clicked during the wait) |
-| reaction_ms | time from stimulus appearing to click, in ms |
-| timestamp | ISO time of the event |
+```csv
+test_number,ms
+1,312
+2,287
+3,
+```
+
+`ms` is the time from the goal appearing to the click; it's empty if that attempt was missed.
 
 ## Run locally
 
