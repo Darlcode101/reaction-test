@@ -7,18 +7,18 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Shared gradients for the shape test -->
+  <!-- Shading overlays drawn on top of each shape's flat colour -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
       <radialGradient id="g-sphere" cx="35%" cy="35%" r="70%">
-        <stop offset="0" stop-color="#d4e0ff"/>
-        <stop offset=".5" stop-color="#5b7fe0"/>
-        <stop offset="1" stop-color="#1e3473"/>
+        <stop offset="0" stop-color="#fff" stop-opacity=".7"/>
+        <stop offset=".45" stop-color="#fff" stop-opacity="0"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".5"/>
       </radialGradient>
       <linearGradient id="g-side" x1="0" x2="1">
-        <stop offset="0" stop-color="#2f4fa8"/>
-        <stop offset=".35" stop-color="#8eabf6"/>
-        <stop offset="1" stop-color="#253f8a"/>
+        <stop offset="0" stop-color="#000" stop-opacity=".35"/>
+        <stop offset=".35" stop-color="#fff" stop-opacity=".3"/>
+        <stop offset="1" stop-color="#000" stop-opacity=".4"/>
       </linearGradient>
     </defs>
   </svg>
@@ -33,15 +33,15 @@
       </label>
 
       <div class="cards">
-        <button class="card" data-test="colour">
-          <span class="card-icon colours"><i></i><i></i><i></i><i></i></span>
-          <b>Colour test</b>
-          <span class="muted">Click only when the box turns your goal colour.</span>
-        </button>
         <button class="card" data-test="shape">
           <span class="card-icon" id="shape-icon"></span>
-          <b>Shape test</b>
+          <b>1. Shape test</b>
           <span class="muted">Click only when your goal shape appears.</span>
+        </button>
+        <button class="card" data-test="combo">
+          <span class="card-icon" id="combo-icon"></span>
+          <b>2. Shape + colour test</b>
+          <span class="muted">Click only when the shape <i>and</i> the colour both match.</span>
         </button>
       </div>
 

@@ -58,18 +58,12 @@ button.ghost { background: transparent; border-color: transparent; }
 .card b { font-size: 1.15rem; }
 .card-icon { height: 56px; display: flex; align-items: center; gap: 6px; }
 .card-icon svg { width: 56px; height: 56px; }
-.colours i { width: 22px; height: 22px; border-radius: 6px; display: block; }
-.colours i:nth-child(1) { background: #e5484d; }
-.colours i:nth-child(2) { background: #f5d90a; }
-.colours i:nth-child(3) { background: #30a46c; }
-.colours i:nth-child(4) { background: #0090ff; }
 
 #downloads { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px; }
 
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .goal { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 700; }
 #goal { display: inline-flex; align-items: center; gap: 8px; }
-.swatch { width: 32px; height: 32px; border-radius: 8px; display: inline-block; }
 svg.mini { width: 40px; height: 40px; }
 
 #stage {

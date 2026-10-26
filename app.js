@@ -1,4 +1,4 @@
-// Reaction Lab: colour and shape go/no-go reaction tests with CSV export.
+// Reaction Lab: shape and shape+colour go/no-go reaction tests with CSV export.
 
 const TRIALS = 10;           // goal appearances per test
 const DISTRACTOR_MS = 800;   // how long a non-goal stays on screen
@@ -9,39 +9,66 @@ const BLANK_MAX_MS = 1800;
 
 const COLOURS = {
   Red: '#e5484d',
-  Orange: '#f76b15',
   Yellow: '#f5d90a',
   Green: '#30a46c',
-  Blue: '#0090ff',
+  Blue: '#4a72e0',
   Purple: '#8e4ec6',
-  Pink: '#e93d82',
-  Cyan: '#00b8d9',
 };
+const COLOUR_NAMES = Object.keys(COLOURS);
 
-// Every shape uses the same blue shading so only the shape differs.
+// Shapes are drawn in a flat colour with white/black overlays for shading,
+// so any colour gets the same 3D look.
+const poly = (pts, c, shade = 0) =>
+  `<polygon points="${pts}" fill="${c}"/>` +
+  (shade ? `<polygon points="${pts}" fill="${shade > 0 ? '#fff' : '#000'}" fill-opacity="${Math.abs(shade)}"/>` : '');
+const shaded = (el, c, grad) => `<${el} fill="${c}"/><${el} fill="url(#${grad})"/>`;
+
 const SHAPES = {
-  Cube: '<polygon points="100,30 165,65 100,100 35,65" fill="#a9c1ff"/><polygon points="35,65 100,100 100,175 35,140" fill="#5b7fe0"/><polygon points="100,100 165,65 165,140 100,175" fill="#34529f"/>',
-  Sphere: '<circle cx="100" cy="100" r="70" fill="url(#g-sphere)"/>',
-  Pyramid: '<polygon points="100,25 40,150 100,175" fill="#7d9cf0"/><polygon points="100,25 100,175 160,150" fill="#34529f"/>',
-  Cylinder: '<ellipse cx="100" cy="150" rx="60" ry="18" fill="url(#g-side)"/><rect x="40" y="50" width="120" height="100" fill="url(#g-side)"/><ellipse cx="100" cy="50" rx="60" ry="18" fill="#a9c1ff"/>',
-  Cone: '<path d="M40 150 L100 25 L160 150 A60 18 0 0 1 40 150 Z" fill="url(#g-side)"/>',
+  Cube: c => poly('100,30 165,65 100,100 35,65', c, 0.35) + poly('35,65 100,100 100,175 35,140', c) + poly('100,100 165,65 165,140 100,175', c, -0.3),
+  Sphere: c => shaded('circle cx="100" cy="100" r="70"', c, 'g-sphere'),
+  Pyramid: c => poly('100,25 40,150 100,175', c, 0.15) + poly('100,25 100,175 160,150', c, -0.3),
+  Cylinder: c =>
+    shaded('ellipse cx="100" cy="150" rx="60" ry="18"', c, 'g-side') +
+    shaded('rect x="40" y="50" width="120" height="100"', c, 'g-side') +
+    `<ellipse cx="100" cy="50" rx="60" ry="18" fill="${c}"/><ellipse cx="100" cy="50" rx="60" ry="18" fill="#fff" fill-opacity=".35"/>`,
+  Cone: c => shaded('path d="M40 150 L100 25 L160 150 A60 18 0 0 1 40 150 Z"', c, 'g-side'),
 };
-const shapeSvg = (name, cls) => `<svg viewBox="0 0 200 200" class="${cls}" role="img" aria-label="${name}">${SHAPES[name]}</svg>`;
+const SHAPE_NAMES = Object.keys(SHAPES);
+
+const shapeSvg = (item, cls) =>
+  `<svg viewBox="0 0 200 200" class="${cls}" role="img" aria-label="${labelOf(item)}">${SHAPES[item.shape](COLOURS[item.colour])}</svg>`;
+const labelOf = item => (item.showColour ? `${item.colour} ${item.shape}` : item.shape);
+const others = (list, x) => list.filter(v => v !== x);
 
 const TESTS = {
-  colour: {
-    label: 'Colour test',
-    items: Object.keys(COLOURS),
-    goalHTML: n => `<span class="swatch" style="background:${COLOURS[n]}"></span>${n}`,
-    show: n => { stage.style.background = COLOURS[n]; stim.innerHTML = ''; },
-  },
+  // Test 1: every shape is the same blue, so only the shape matters.
   shape: {
     label: 'Shape test',
-    items: Object.keys(SHAPES),
-    goalHTML: n => `${shapeSvg(n, 'mini')}${n}`,
-    show: n => { stage.style.background = ''; stim.innerHTML = shapeSvg(n, 'big'); },
+    makeGoal: () => ({ shape: pick(SHAPE_NAMES), colour: 'Blue' }),
+    makeDistractor: goal => ({ shape: pick(others(SHAPE_NAMES, goal.shape)), colour: 'Blue' }),
+  },
+  // Test 2: must match shape AND colour. Most distractors get one of the two right.
+  combo: {
+    label: 'Shape + colour test',
+    makeGoal: () => ({ shape: pick(SHAPE_NAMES), colour: pick(COLOUR_NAMES), showColour: true }),
+    makeDistractor: goal => {
+      const r = Math.random();
+      const shape = r < 0.4 ? goal.shape : pick(others(SHAPE_NAMES, goal.shape));
+      const colour = r >= 0.4 && r < 0.8 ? goal.colour : pick(others(COLOUR_NAMES, goal.colour));
+      return { shape, colour, showColour: true };
+    },
   },
 };
+
+// What a stimulus is relative to the goal, for the CSV.
+function stimulusType(item, goal) {
+  const shapeOk = item.shape === goal.shape;
+  const colourOk = item.colour === goal.colour;
+  if (shapeOk && colourOk) return 'goal';
+  if (shapeOk) return 'wrong colour';
+  if (colourOk) return 'wrong shape';
+  return 'wrong shape and colour';
+}
 
 const $ = id => document.getElementById(id);
 const stage = $('stage'), stim = $('stim'), msg = $('msg');
@@ -55,15 +82,17 @@ function showScreen(id) {
   for (const s of ['home', 'test', 'results']) $(s).hidden = s !== id;
 }
 
-// Each goal is preceded by 0–2 distractors; no item repeats back to back.
-function buildSequence(items, goal) {
+// Each goal is preceded by 0–2 distractors; no stimulus repeats back to back.
+function buildSequence(t, goal) {
   const seq = [];
   let prev = null;
   for (let i = 0; i < TRIALS; i++) {
     const n = Math.floor(Math.random() * 3);
     for (let k = 0; k < n; k++) {
-      prev = pick(items.filter(x => x !== goal && x !== prev));
-      seq.push(prev);
+      let d;
+      do d = t.makeDistractor(goal); while (prev && labelOf(d) === labelOf(prev));
+      seq.push(d);
+      prev = d;
     }
     seq.push(goal);
     prev = goal;
@@ -73,22 +102,21 @@ function buildSequence(items, goal) {
 
 function startTest(key) {
   const t = TESTS[key];
-  const goal = pick(t.items);
+  const goal = t.makeGoal();
   run = {
     key, t, goal,
     name: $('name').value.trim() || 'anonymous',
-    seq: buildSequence(t.items, goal),
+    seq: buildSequence(t, goal),
     idx: 0, attempt: 0, log: [],
     state: 'ready', timer: null, shownAt: 0, current: null,
   };
-  $('goal').innerHTML = t.goalHTML(goal);
+  $('goal').innerHTML = `${shapeSvg(goal, 'mini')}${labelOf(goal)}`;
   updateProgress();
-  setBlank(`Click only when you see <b>${goal}</b>.<br>Tap here or press space to start.`);
+  setBlank(`Click only when you see a <b>${labelOf(goal)}</b>.<br>Tap here or press space to start.`);
   showScreen('test');
 }
 
 function setBlank(html = '') {
-  stage.style.background = '';
   stim.innerHTML = '';
   msg.className = '';
   msg.innerHTML = html;
@@ -98,11 +126,13 @@ function updateProgress() {
   $('progress').textContent = `${run.attempt} / ${TRIALS}`;
 }
 
-function record(result, shown, ms) {
+function record(result, item, ms) {
   run.log.push({
     row: run.log.length + 1,
     attempt: run.attempt + 1,
-    shown, result, ms,
+    shown: item ? labelOf(item) : '',
+    type: item ? stimulusType(item, run.goal) : '',
+    result, ms,
     time: new Date().toISOString(),
   });
 }
@@ -125,7 +155,7 @@ function next() {
 function showStim() {
   const item = run.seq[run.idx];
   const isGoal = item === run.goal;
-  run.t.show(item);
+  stim.innerHTML = shapeSvg(item, 'big');
   msg.innerHTML = '';
   run.state = 'stim';
   run.current = item;
@@ -147,7 +177,7 @@ function press(e) {
   if (run.state === 'ready') return next();
   if (run.state === 'wait' || (run.state === 'stim' && at < run.shownAt)) {
     clearTimeout(run.timer);
-    record('early', '', '');
+    record('early', null, '');
     return feedback('Too soon!', 'bad');
   }
   if (run.state !== 'stim') return;
@@ -163,13 +193,13 @@ function press(e) {
     feedback(`${ms} ms`, 'good');
   } else {
     record('wrong', item, ms);
-    feedback(`Wrong — that was ${item}`, 'bad');
+    feedback(`Wrong — that was a ${labelOf(item)}`, 'bad');
   }
 }
 
 function finish() {
   run.state = 'done';
-  const r = { key: run.key, label: run.t.label, goal: run.goal, name: run.name, log: run.log, date: new Date() };
+  const r = { key: run.key, label: run.t.label, goal: labelOf(run.goal), name: run.name, log: run.log, date: new Date() };
   lastResults[r.key] = r;
   renderResults(r);
   renderDownloads();
@@ -225,8 +255,8 @@ const csvCell = v => {
 };
 
 function downloadCSV(r) {
-  const head = ['participant', 'test', 'goal', 'row', 'attempt', 'shown', 'result', 'reaction_ms', 'timestamp'];
-  const rows = r.log.map(l => [r.name, r.key, r.goal, l.row, l.attempt, l.shown, l.result, l.ms, l.time]);
+  const head = ['participant', 'test', 'goal', 'row', 'attempt', 'shown', 'stimulus_type', 'result', 'reaction_ms', 'timestamp'];
+  const rows = r.log.map(l => [r.name, r.key, r.goal, l.row, l.attempt, l.shown, l.type, l.result, l.ms, l.time]);
   const csv = [head, ...rows].map(row => row.map(csvCell).join(',')).join('\r\n');
   const slug = r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'anonymous';
   const stamp = r.date.toISOString().slice(0, 16).replace(/[:T]/g, '-');
@@ -241,7 +271,8 @@ function downloadCSV(r) {
 
 // Wiring
 document.querySelectorAll('[data-test]').forEach(b => b.addEventListener('click', () => startTest(b.dataset.test)));
-$('shape-icon').innerHTML = shapeSvg('Cube', '') + shapeSvg('Sphere', '');
+$('shape-icon').innerHTML = shapeSvg({ shape: 'Cube', colour: 'Blue' }, '') + shapeSvg({ shape: 'Sphere', colour: 'Blue' }, '');
+$('combo-icon').innerHTML = shapeSvg({ shape: 'Cube', colour: 'Red' }, '') + shapeSvg({ shape: 'Cone', colour: 'Yellow' }, '');
 
 stage.addEventListener('pointerdown', e => {
   if (e.button !== 0) return;
