@@ -124,12 +124,12 @@ function record(result, item, ms) {
   });
 }
 
-function feedback(text, kind) {
+function feedback(text, kind, then = next) {
   setBlank();
   msg.textContent = text;
   msg.className = kind;
   run.state = 'feedback';
-  run.timer = setTimeout(next, FEEDBACK_MS);
+  run.timer = setTimeout(then, FEEDBACK_MS);
 }
 
 function next() {
@@ -159,6 +159,7 @@ function showStim() {
 
 function press(e) {
   if (!run) return;
+  if (run.key === 'focus') return focusPress(e);
   // Event timestamps share performance.now()'s clock and skip handler lag.
   const at = e.timeStamp || performance.now();
   if (run.state === 'ready') return next();
@@ -255,8 +256,224 @@ function downloadCSV(r) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
+// Test 3, the "Focus test", is the easter egg: a couple of normal
+// click-when-green rounds, then a jumpscare where the green dot should be.
+const FOCUS_ROUNDS = 5; // what the progress counter claims
+const SCARE_ROUND = 3;
+const SCARE_MS = 2200;
+let audio = null;
+
+// Browsers only allow sound after a user gesture, so unlock it on the start clicks.
+function unlockAudio() {
+  try {
+    audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume();
+    const s = audio.createBufferSource();
+    s.buffer = audio.createBuffer(1, 1, 22050);
+    s.connect(audio.destination);
+    s.start();
+  } catch {}
+}
+
+function startFocus() {
+  unlockAudio();
+  run = { key: 'focus', state: 'ready', round: 0, timer: null, shownAt: 0, flinch: null };
+  $('goal').innerHTML = '<span class="dot green"></span>Green dot';
+  updateFocusProgress();
+  setBlank('Stare at the dot. Click the moment it turns green.<br>Tap here or press space to start.');
+  showScreen('test');
+}
+
+function updateFocusProgress() {
+  $('progress').textContent = `${run.round} / ${FOCUS_ROUNDS}`;
+}
+
+function focusRound() {
+  run.state = 'wait';
+  setBlank();
+  stim.innerHTML = '<span class="dot big"></span>';
+  if (run.round + 1 === SCARE_ROUND) {
+    run.timer = setTimeout(jumpscare, rand(5000, 7000));
+    return;
+  }
+  run.timer = setTimeout(() => {
+    stim.firstChild.classList.add('green');
+    run.state = 'stim';
+    run.shownAt = performance.now();
+  }, rand(1500, 3000));
+}
+
+function focusPress(e) {
+  const at = e.timeStamp || performance.now();
+  if (run.state === 'ready') {
+    unlockAudio();
+    return focusRound();
+  }
+  if (run.state === 'wait') {
+    clearTimeout(run.timer);
+    return feedback('Too soon!', 'bad', focusRound);
+  }
+  if (run.state === 'stim') {
+    run.round++;
+    updateFocusProgress();
+    return feedback(`${Math.round(at - run.shownAt)} ms`, 'good', focusRound);
+  }
+  if (run.state === 'scare' && run.flinch == null) run.flinch = Math.max(0, Math.round(at - run.shownAt));
+  // Ignore panicked clicks right after the scare so the result can be read.
+  if (run.state === 'over' && performance.now() - run.overAt > 800) showScreen('home');
+}
+
+function jumpscare() {
+  const el = $('scare');
+  el.innerHTML = faceSvg();
+  el.hidden = false;
+  run.state = 'scare';
+  run.shownAt = performance.now();
+  try { scream(audio); } catch {}
+  navigator.vibrate?.([400, 80, 400, 80, 700]);
+  run.timer = setTimeout(() => {
+    el.hidden = true;
+    el.innerHTML = '';
+    run.state = 'over';
+    run.overAt = performance.now();
+    $('progress').textContent = '😈';
+    setBlank(
+      `<b>Got you.</b><br>${run.flinch == null ? 'You froze. Not a single click.' : `Flinch time: ${run.flinch} ms`}` +
+      '<br><span class="wait">Tap to go home</span>'
+    );
+  }, SCARE_MS);
+}
+
+// Point on a quadratic curve, used to lay teeth along the mouth edge.
+const qpt = (p0, c, p1, t) => [0, 1].map(k => +((1 - t) ** 2 * p0[k] + 2 * (1 - t) * t * c[k] + t * t * p1[k]).toFixed(1));
+
+function teethAlong(p0, c, p1, n, centre) {
+  let s = '';
+  for (let i = 0; i < n; i++) {
+    const a = qpt(p0, c, p1, i / n), b = qpt(p0, c, p1, (i + 1) / n);
+    const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const dx = centre[0] - m[0], dy = centre[1] - m[1], len = Math.hypot(dx, dy);
+    const reach = rand(18, 38);
+    const tip = [m[0] + (dx / len) * reach + rand(-4, 4), m[1] + (dy / len) * reach].map(v => v.toFixed(1));
+    s += `<polygon points="${a} ${b} ${tip}" fill="#e6dfc3" stroke="#5c4e2e" stroke-width="1.2"/>`;
+  }
+  return s;
+}
+
+function faceSvg() {
+  const head = 'M200 18 C318 18 362 140 352 250 C342 382 282 484 200 494 C118 484 58 382 48 250 C38 140 82 18 200 18Z';
+  const mouth = 'M106 318 Q200 286 294 318 Q306 432 200 474 Q94 432 106 318Z';
+  const centre = [200, 380];
+  const teeth =
+    teethAlong([106, 318], [200, 286], [294, 318], 10, centre) +
+    teethAlong([294, 318], [306, 432], [200, 474], 7, centre) +
+    teethAlong([200, 474], [94, 432], [106, 318], 7, centre);
+  return `<svg viewBox="0 0 400 512" role="img" aria-label="Got you">
+  <defs>
+    <radialGradient id="sk" cx="50%" cy="38%" r="62%">
+      <stop offset="0" stop-color="#ece6d2"/><stop offset=".55" stop-color="#a49c85"/><stop offset="1" stop-color="#1c1915"/>
+    </radialGradient>
+    <radialGradient id="sock"><stop offset=".35" stop-color="#000"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#ff3030"/><stop offset="1" stop-color="#f00" stop-opacity="0"/></radialGradient>
+    <radialGradient id="gullet"><stop offset="0" stop-color="#000"/><stop offset=".6" stop-color="#2a0000"/><stop offset="1" stop-color="#6e0000"/></radialGradient>
+    <clipPath id="headclip"><path d="${head}"/></clipPath>
+    <filter id="grime" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" seed="7"/>
+      <feColorMatrix values="0 0 0 0 .05  0 0 0 0 0  0 0 0 0 0  1.4 0 0 0 -.55"/>
+    </filter>
+  </defs>
+  <path d="${head}" fill="url(#sk)"/>
+  <g clip-path="url(#headclip)">
+    <rect width="400" height="512" filter="url(#grime)"/>
+    <path d="M78 110 l22 34 l-9 26 l18 22 M300 90 l-14 30 l12 24 l-16 30 M60 300 l24 10 l6 28 M330 320 l-20 14 l4 30"
+      stroke="#3d0707" stroke-width="2.2" fill="none" opacity=".8"/>
+  </g>
+  <ellipse cx="132" cy="196" rx="78" ry="66" fill="url(#sock)"/>
+  <ellipse cx="268" cy="196" rx="78" ry="66" fill="url(#sock)"/>
+  <ellipse cx="136" cy="204" rx="40" ry="48" fill="#000" transform="rotate(-18 136 204)"/>
+  <ellipse cx="264" cy="204" rx="40" ry="48" fill="#000" transform="rotate(18 264 204)"/>
+  <path d="M128 244 q-6 48 3 104 q5 8 8 0 q3 -56 -3 -104Z M270 246 q8 34 -1 70 q-4 7 -7 0 q-4 -34 0 -70Z" fill="#6a0000"/>
+  <circle cx="146" cy="214" r="15" fill="url(#glow)"/>
+  <circle cx="254" cy="214" r="15" fill="url(#glow)"/>
+  <circle cx="146" cy="214" r="2.6" fill="#fff"/>
+  <circle cx="254" cy="214" r="2.6" fill="#fff"/>
+  <path d="M188 270 L200 242 L212 270 Q200 280 188 270Z" fill="#000" opacity=".85"/>
+  <path d="${mouth}" fill="url(#gullet)" stroke="#120000" stroke-width="4"/>
+  ${teeth}
+</svg>`;
+}
+
+// A screech built from detuned, wobbling, distorted saw waves over a noise
+// burst, with a low thump on the hit. The compressor keeps peaks in check.
+function scream(ctx) {
+  const t = ctx.currentTime, dur = 2;
+  const comp = ctx.createDynamicsCompressor();
+  comp.connect(ctx.destination);
+  const out = ctx.createGain();
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(0.9, t + 0.015);
+  out.gain.setValueAtTime(0.9, t + dur - 0.5);
+  out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  out.connect(comp);
+
+  const shaper = ctx.createWaveShaper();
+  const curve = new Float32Array(1024);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = ((Math.PI + 300) * x) / (Math.PI + 300 * Math.abs(x));
+  }
+  shaper.curve = curve;
+  shaper.connect(out);
+
+  for (const semi of [0, 6, -5, 11, 13]) {
+    const f = 720 * 2 ** (semi / 12);
+    const o = ctx.createOscillator();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(f * 0.5, t);
+    o.frequency.exponentialRampToValueAtTime(f * 1.5, t + 0.12);
+    o.frequency.linearRampToValueAtTime(f * 1.15, t + dur);
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 8 + Math.random() * 6;
+    const depth = ctx.createGain();
+    depth.gain.value = f * 0.09;
+    lfo.connect(depth).connect(o.frequency);
+    const g = ctx.createGain();
+    g.gain.value = 0.16;
+    o.connect(g).connect(shaper);
+    o.start(t); lfo.start(t);
+    o.stop(t + dur); lfo.stop(t + dur);
+  }
+
+  const buf = ctx.createBuffer(1, ctx.sampleRate * dur, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buf;
+  const band = ctx.createBiquadFilter();
+  band.type = 'bandpass';
+  band.frequency.value = 2600;
+  band.Q.value = 0.6;
+  const ng = ctx.createGain();
+  ng.gain.setValueAtTime(0.9, t);
+  ng.gain.exponentialRampToValueAtTime(0.12, t + 0.35);
+  noise.connect(band).connect(ng).connect(shaper);
+  noise.start(t);
+
+  const boom = ctx.createOscillator();
+  boom.frequency.setValueAtTime(130, t);
+  boom.frequency.exponentialRampToValueAtTime(32, t + 0.5);
+  const bg = ctx.createGain();
+  bg.gain.setValueAtTime(1, t);
+  bg.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  boom.connect(bg).connect(comp);
+  boom.start(t);
+  boom.stop(t + 0.6);
+}
+
 // Wiring
-document.querySelectorAll('[data-test]').forEach(b => b.addEventListener('click', () => startTest(b.dataset.test)));
+document.querySelectorAll('[data-test]').forEach(b => b.addEventListener('click', () =>
+  b.dataset.test === 'focus' ? startFocus() : startTest(b.dataset.test)));
+$('scare').addEventListener('pointerdown', e => { e.preventDefault(); press(e); });
 $('shape-icon').innerHTML = shapeSvg({ shape: 'Cube', colour: 'Blue' }, '') + shapeSvg({ shape: 'Sphere', colour: 'Blue' }, '');
 $('combo-icon').innerHTML = shapeSvg({ shape: 'Cube', colour: 'Red' }, '') + shapeSvg({ shape: 'Cone', colour: 'Yellow' }, '');
 

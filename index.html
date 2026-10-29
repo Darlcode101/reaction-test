@@ -26,7 +26,7 @@
   <main>
     <section id="home">
       <h1>Reaction Lab</h1>
-      <p class="muted">Two quick tests. Hit the box (or press <kbd>Space</kbd>) <b>only</b> when the goal shows up. Ignore everything else.</p>
+      <p class="muted">Three quick tests. Hit the box (or press <kbd>Space</kbd>) <b>only</b> when the goal shows up. Ignore everything else.</p>
 
       <div class="cards">
         <button class="card" data-test="shape">
@@ -38,6 +38,11 @@
           <span class="card-icon" id="combo-icon"></span>
           <b>2. Shape + colour test</b>
           <span class="muted">Click only when the shape <i>and</i> the colour both match.</span>
+        </button>
+        <button class="card" data-test="focus">
+          <span class="card-icon"><span class="dot big"></span></span>
+          <b>3. Focus test</b>
+          <span class="muted">Stare at the dot. Click the moment it turns green.</span>
         </button>
       </div>
 
@@ -70,6 +75,8 @@
       </table>
     </section>
   </main>
+
+  <div id="scare" hidden></div>
 
   <script src="app.js"></script>
 </body>

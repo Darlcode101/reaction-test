@@ -1,9 +1,10 @@
 # Reaction Lab
 
-Two go/no-go reaction time tests, as a static site for GitHub Pages.
+Go/no-go reaction time tests, as a static site for GitHub Pages.
 
 1. **Shape test** – a goal shape is shown at the top. 3D shapes (cube, sphere, pyramid, cylinder, cone) flash up one at a time, all in the same blue; click (or press Space) only when the goal shape appears.
 2. **Shape + colour test** – the goal is a shape *and* a colour (e.g. "Red Cube"), with shapes in red, yellow, green, blue or purple. Click only when both match. Most distractors are near-misses: right shape in the wrong colour, or the right colour on the wrong shape.
+3. **Focus test** – stare at the dot and click when it turns green. Turn your sound up. 🤫
 
 Each test runs 10 goal appearances, with 0–2 distractors before each one and a random 0.6–1.8 s wait between stimuli. A goal that isn't clicked within 1.5 s counts as a miss.
 
